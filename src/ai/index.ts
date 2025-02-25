@@ -6,6 +6,7 @@
  */
 
 import type { AIPrompt, AIResponse, TestScenario } from "../types/index.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // 環境変数からAPIキーを取得する関数
 function getApiKey(): string {
@@ -192,3 +193,211 @@ export async function generateTestCodeStream(
 		);
 	}
 }
+
+// ===== テストコード =====
+
+describe('createPrompt', () => {
+  it('基本的なテストシナリオからプロンプトを生成できること', () => {
+    // テスト用のシナリオを作成
+    const scenario: TestScenario = {
+      description: 'ログインページのテスト'
+    };
+
+    // 関数を実行
+    const prompt = createPrompt(scenario);
+
+    // 結果を検証
+    expect(prompt).toHaveProperty('system');
+    expect(prompt).toHaveProperty('user');
+    expect(prompt.system).toBe(SYSTEM_PROMPT);
+    expect(prompt.user).toContain('ログインページのテスト');
+  });
+
+  it('URLを含むテストシナリオからプロンプトを生成できること', () => {
+    // テスト用のシナリオを作成
+    const scenario: TestScenario = {
+      description: 'ログインページのテスト',
+      url: 'https://example.com/login'
+    };
+
+    // 関数を実行
+    const prompt = createPrompt(scenario);
+
+    // 結果を検証
+    expect(prompt.user).toContain('ログインページのテスト');
+    expect(prompt.user).toContain('テスト対象のURL: https://example.com/login');
+  });
+
+  it('オプションを含むテストシナリオからプロンプトを生成できること', () => {
+    // テスト用のシナリオを作成
+    const scenario: TestScenario = {
+      description: 'ログインページのテスト',
+      options: {
+        browser: 'firefox',
+        headless: false,
+        screenshot: true,
+        timeout: 60000
+      }
+    };
+
+    // 関数を実行
+    const prompt = createPrompt(scenario);
+
+    // 結果を検証
+    expect(prompt.user).toContain('ログインページのテスト');
+    expect(prompt.user).toContain('ブラウザ: firefox');
+    expect(prompt.user).toContain('ヘッドレスモード: 無効');
+    expect(prompt.user).toContain('スクリーンショット: 有効');
+    expect(prompt.user).toContain('タイムアウト: 60000ms');
+  });
+});
+
+describe('generateTestCode', () => {
+  // モックの設定
+  beforeEach(() => {
+    // 環境変数のモック
+    vi.stubEnv('API_KEY', 'test-api-key');
+    
+    // fetchのモック
+    global.fetch = vi.fn();
+  });
+
+  // モックのリセット
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetAllMocks();
+  });
+
+  it('AIからテストコードを生成できること', async () => {
+    // fetchのモックレスポンスを設定
+    const mockResponse = {
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        content: [
+          {
+            text: '```typescript\nconst test = "example";\n```\n\nこれはテストコードの説明です。'
+          }
+        ]
+      })
+    };
+    (global.fetch as any).mockResolvedValue(mockResponse);
+
+    // テスト用のプロンプトを作成
+    const prompt: AIPrompt = {
+      system: 'システムプロンプト',
+      user: 'ユーザープロンプト'
+    };
+
+    // 関数を実行
+    const result = await generateTestCode(prompt);
+
+    // 結果を検証
+    expect(result).toHaveProperty('testCode');
+    expect(result).toHaveProperty('explanation');
+    expect(result.testCode).toBe('const test = "example";\n');
+    expect(result.explanation).toBe('これはテストコードの説明です。');
+
+    // fetchが正しく呼び出されたことを検証
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.anthropic.com/v1/messages',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'x-api-key': 'test-api-key'
+        }),
+        body: expect.any(String)
+      })
+    );
+  });
+
+  it('APIキーが設定されていない場合にエラーをスローすること', async () => {
+    // 環境変数のモックをリセット
+    vi.unstubAllEnvs();
+
+    // テスト用のプロンプトを作成
+    const prompt: AIPrompt = {
+      system: 'システムプロンプト',
+      user: 'ユーザープロンプト'
+    };
+
+    // 関数の実行とエラーの検証
+    await expect(generateTestCode(prompt)).rejects.toThrow('API_KEYが設定されていません');
+  });
+
+  it('APIレスポンスがエラーの場合にエラーをスローすること', async () => {
+    // fetchのモックレスポンスを設定（エラー）
+    const mockResponse = {
+      ok: false,
+      statusText: 'Bad Request',
+      json: vi.fn().mockResolvedValue({
+        error: { message: 'Invalid request' }
+      })
+    };
+    (global.fetch as any).mockResolvedValue(mockResponse);
+
+    // テスト用のプロンプトを作成
+    const prompt: AIPrompt = {
+      system: 'システムプロンプト',
+      user: 'ユーザープロンプト'
+    };
+
+    // 関数の実行とエラーの検証
+    await expect(generateTestCode(prompt)).rejects.toThrow('API error: Invalid request');
+  });
+});
+
+describe('generateTestCodeStream', () => {
+  // モックの設定
+  beforeEach(() => {
+    // 環境変数のモック
+    vi.stubEnv('API_KEY', 'test-api-key');
+    
+    // fetchのモック
+    global.fetch = vi.fn();
+  });
+
+  // モックのリセット
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetAllMocks();
+  });
+
+  it('AIからストリーミングレスポンスを取得できること', async () => {
+    // fetchのモックレスポンスを設定
+    const mockResponse = {
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        content: [
+          {
+            text: 'ストリーミングレスポンスの内容'
+          }
+        ]
+      })
+    };
+    (global.fetch as any).mockResolvedValue(mockResponse);
+
+    // テスト用のプロンプトを作成
+    const prompt: AIPrompt = {
+      system: 'システムプロンプト',
+      user: 'ユーザープロンプト'
+    };
+
+    // 関数を実行
+    const result = await generateTestCodeStream(prompt);
+
+    // 結果を検証
+    expect(result).toBe('ストリーミングレスポンスの内容');
+
+    // fetchが正しく呼び出されたことを検証
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.anthropic.com/v1/messages',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'x-api-key': 'test-api-key'
+        }),
+        body: expect.any(String)
+      })
+    );
+  });
+});
