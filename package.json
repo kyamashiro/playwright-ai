@@ -1,0 +1,44 @@
+{
+	"name": "scenario-test",
+	"version": "0.1.0",
+	"description": "AI Agentを活用し、対話式で自動的にPlaywright用のE2Eテストを生成するツール",
+	"main": "dist/index.js",
+	"type": "module",
+	"scripts": {
+		"build": "tsc",
+		"start": "node dist/index.js",
+		"dev": "tsc --watch & node --watch dist/index.js",
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"test": "vitest"
+	},
+	"keywords": [
+		"e2e",
+		"test",
+		"playwright",
+		"ai",
+		"agent",
+		"langgraph"
+	],
+	"author": "",
+	"license": "MIT",
+	"devDependencies": {
+		"@biomejs/biome": "1.9.4",
+		"@types/node": "^22.13.5",
+		"typescript": "^5.7.3",
+		"vitest": "^3.0.7"
+	},
+	"pnpm": {
+		"ignoredBuiltDependencies": [
+			"@biomejs/biome",
+			"esbuild"
+		]
+	},
+	"dependencies": {
+		"@ai-sdk/anthropic": "^1.1.10",
+		"@playwright/test": "^1.50.1",
+		"ai": "^4.1.46",
+		"dotenv": "^16.4.7",
+		"playwright": "^1.50.1"
+	}
+}
