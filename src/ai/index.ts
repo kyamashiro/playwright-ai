@@ -39,6 +39,11 @@ function getLocalLLMBaseURL(): string {
 	return baseURL;
 }
 
+// 環境変数からベースURLを取得する関数
+function getBaseUrl(): string | undefined {
+	return process.env.TEST_TARGET_BASE_URL;
+}
+
 /**
  * システムプロンプト
  * AIにPlaywrightのテストコードを生成させるための指示
@@ -74,12 +79,15 @@ const SYSTEM_PROMPT = `あなたはPlaywrightを使用したE2Eテストの専�
 export function createPrompt(scenario: TestScenario): AIPrompt {
 	let userPrompt = `以下のテストシナリオに基づいて、Playwrightのテストコードを生成してください：\n\n${scenario.description}\n\n`;
 
+	// テスト対象のURLを設定
+	const baseUrl = getBaseUrl();
 	if (scenario.url) {
 		userPrompt += `テスト対象のURL: ${scenario.url}\n\n`;
+	} else if (baseUrl) {
+		userPrompt += `テスト対象のURL: ${baseUrl}\n\n`;
 	}
 
 	if (scenario.options) {
-		userPrompt += "テストオプション:\n";
 		if (scenario.options.browser) {
 			userPrompt += `- ブラウザ: ${scenario.options.browser}\n`;
 		}
@@ -100,6 +108,21 @@ export function createPrompt(scenario: TestScenario): AIPrompt {
 	};
 }
 
+// APIレスポンスの型定義
+interface LocalLLMResponse {
+    choices: Array<{
+        message: {
+            content: string;
+        };
+    }>;
+}
+
+interface AnthropicResponse {
+    content: Array<{
+        text: string;
+    }>;
+}
+
 /**
  * AIにプロンプトを送信してテストコードを生成する
  * @param prompt AIプロンプト
@@ -107,9 +130,8 @@ export function createPrompt(scenario: TestScenario): AIPrompt {
  */
 export async function generateTestCode(prompt: AIPrompt): Promise<AIResponse> {
 	try {
-		let response;
-		let data;
-		let content;
+		let response: Response;
+		let content: string;
 
 		if (isLocalLLM()) {
 			// ローカルLLM（LM Studio）を使用
@@ -143,7 +165,7 @@ export async function generateTestCode(prompt: AIPrompt): Promise<AIResponse> {
 				);
 			}
 
-			data = await response.json();
+			const data: LocalLLMResponse = await response.json();
 			content = data.choices[0].message.content;
 		} else {
 			// Anthropic APIを使用
@@ -176,7 +198,7 @@ export async function generateTestCode(prompt: AIPrompt): Promise<AIResponse> {
 				);
 			}
 
-			data = await response.json();
+			const data: AnthropicResponse = await response.json();
 			content = data.content[0].text;
 		}
 
@@ -210,9 +232,8 @@ export async function generateTestCodeStream(
 	prompt: AIPrompt,
 ): Promise<string> {
 	try {
-		let response;
-		let data;
-		let content;
+		let response: Response;
+		let content: string;
 
 		if (isLocalLLM()) {
 			// ローカルLLM（LM Studio）を使用
@@ -246,7 +267,7 @@ export async function generateTestCodeStream(
 				);
 			}
 
-			data = await response.json();
+			const data: LocalLLMResponse = await response.json();
 			content = data.choices[0].message.content;
 		} else {
 			// Anthropic APIを使用
@@ -279,7 +300,7 @@ export async function generateTestCodeStream(
 				);
 			}
 
-			data = await response.json();
+			const data: AnthropicResponse = await response.json();
 			content = data.content[0].text;
 		}
 
