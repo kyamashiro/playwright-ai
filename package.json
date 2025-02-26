@@ -12,14 +12,7 @@
 		"format": "biome format --write .",
 		"test": "vitest"
 	},
-	"keywords": [
-		"e2e",
-		"test",
-		"playwright",
-		"ai",
-		"agent",
-		"langgraph"
-	],
+	"keywords": ["e2e", "test", "playwright", "ai", "agent", "langgraph"],
 	"author": "",
 	"license": "MIT",
 	"devDependencies": {
@@ -29,10 +22,7 @@
 		"vitest": "^3.0.7"
 	},
 	"pnpm": {
-		"ignoredBuiltDependencies": [
-			"@biomejs/biome",
-			"esbuild"
-		]
+		"ignoredBuiltDependencies": ["@biomejs/biome", "esbuild"]
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^1.1.10",

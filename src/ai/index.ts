@@ -1,8 +1,9 @@
 /**
  * AI関連の処理を行うモジュール
  *
- * このファイルでは、Anthropic APIを使用してテストコードを生成する機能を提供します。
+ * このファイルでは、Anthropic APIまたはローカルLLM（LM Studio）を使用してテストコードを生成する機能を提供します。
  * テストシナリオからAIプロンプトを生成し、AIにプロンプトを送信してテストコードを取得します。
+ * 環境変数LLM=localの場合は、ローカルLLMサーバーを使用します。
  */
 
 import type { AIPrompt, AIResponse, TestScenario } from "../types/index.js";
@@ -18,6 +19,24 @@ function getApiKey(): string {
 	}
 
 	return apiKey;
+}
+
+// 環境変数からLLMの種類を取得する関数
+function isLocalLLM(): boolean {
+	return process.env.LLM === "local";
+}
+
+// 環境変数からローカルLLMのベースURLを取得する関数
+function getLocalLLMBaseURL(): string {
+	const baseURL = process.env.LLM_BASE_URL;
+
+	if (!baseURL) {
+		throw new Error(
+			"LLM_BASE_URLが設定されていません。.envファイルを確認してください。",
+		);
+	}
+
+	return baseURL;
 }
 
 /**
@@ -88,38 +107,78 @@ export function createPrompt(scenario: TestScenario): AIPrompt {
  */
 export async function generateTestCode(prompt: AIPrompt): Promise<AIResponse> {
 	try {
-		// APIキーを取得
-		const apiKey = getApiKey();
+		let response;
+		let data;
+		let content;
 
-		const response = await fetch("https://api.anthropic.com/v1/messages", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-api-key": apiKey,
-				"anthropic-version": "2023-06-01",
-			} as HeadersInit,
-			body: JSON.stringify({
-				model: "claude-3-opus-20240229",
-				max_tokens: 4000,
-				system: prompt.system,
-				messages: [
-					{
-						role: "user",
-						content: prompt.user,
-					},
-				],
-			}),
-		});
+		if (isLocalLLM()) {
+			// ローカルLLM（LM Studio）を使用
+			const baseURL = getLocalLLMBaseURL();
 
-		if (!response.ok) {
-			const errorData = await response.json();
-			throw new Error(
-				`API error: ${errorData.error?.message || response.statusText}`,
-			);
+			response = await fetch(`${baseURL}/v1/chat/completions`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				} as HeadersInit,
+				body: JSON.stringify({
+					model: "local-model", // LM Studioではモデル名は任意
+					max_tokens: 4000,
+					messages: [
+						{
+							role: "system",
+							content: prompt.system,
+						},
+						{
+							role: "user",
+							content: prompt.user,
+						},
+					],
+				}),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(
+					`API error: ${errorData.error?.message || response.statusText}`,
+				);
+			}
+
+			data = await response.json();
+			content = data.choices[0].message.content;
+		} else {
+			// Anthropic APIを使用
+			const apiKey = getApiKey();
+
+			response = await fetch("https://api.anthropic.com/v1/messages", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"x-api-key": apiKey,
+					"anthropic-version": "2023-06-01",
+				} as HeadersInit,
+				body: JSON.stringify({
+					model: "claude-3-opus-20240229",
+					max_tokens: 4000,
+					system: prompt.system,
+					messages: [
+						{
+							role: "user",
+							content: prompt.user,
+						},
+					],
+				}),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(
+					`API error: ${errorData.error?.message || response.statusText}`,
+				);
+			}
+
+			data = await response.json();
+			content = data.content[0].text;
 		}
-
-		const data = await response.json();
-		const content = data.content[0].text;
 
 		// テストコードと説明を抽出
 		const codeMatch = content.match(/```typescript\n([\s\S]*?)```/);
@@ -151,39 +210,79 @@ export async function generateTestCodeStream(
 	prompt: AIPrompt,
 ): Promise<string> {
 	try {
-		// ストリーミングではなく通常のレスポンスを使用
-		// APIキーを取得
-		const apiKey = getApiKey();
+		let response;
+		let data;
+		let content;
 
-		const response = await fetch("https://api.anthropic.com/v1/messages", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-api-key": apiKey,
-				"anthropic-version": "2023-06-01",
-			} as HeadersInit,
-			body: JSON.stringify({
-				model: "claude-3-opus-20240229",
-				max_tokens: 4000,
-				system: prompt.system,
-				messages: [
-					{
-						role: "user",
-						content: prompt.user,
-					},
-				],
-			}),
-		});
+		if (isLocalLLM()) {
+			// ローカルLLM（LM Studio）を使用
+			const baseURL = getLocalLLMBaseURL();
 
-		if (!response.ok) {
-			const errorData = await response.json();
-			throw new Error(
-				`API error: ${errorData.error?.message || response.statusText}`,
-			);
+			response = await fetch(`${baseURL}/v1/chat/completions`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				} as HeadersInit,
+				body: JSON.stringify({
+					model: "local-model", // LM Studioではモデル名は任意
+					max_tokens: 4000,
+					messages: [
+						{
+							role: "system",
+							content: prompt.system,
+						},
+						{
+							role: "user",
+							content: prompt.user,
+						},
+					],
+				}),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(
+					`API error: ${errorData.error?.message || response.statusText}`,
+				);
+			}
+
+			data = await response.json();
+			content = data.choices[0].message.content;
+		} else {
+			// Anthropic APIを使用
+			const apiKey = getApiKey();
+
+			response = await fetch("https://api.anthropic.com/v1/messages", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"x-api-key": apiKey,
+					"anthropic-version": "2023-06-01",
+				} as HeadersInit,
+				body: JSON.stringify({
+					model: "claude-3-opus-20240229",
+					max_tokens: 4000,
+					system: prompt.system,
+					messages: [
+						{
+							role: "user",
+							content: prompt.user,
+						},
+					],
+				}),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(
+					`API error: ${errorData.error?.message || response.statusText}`,
+				);
+			}
+
+			data = await response.json();
+			content = data.content[0].text;
 		}
 
-		const data = await response.json();
-		const content = data.content[0].text;
 		return content;
 	} catch (error) {
 		console.error("AIによるテストコード生成中にエラーが発生しました:", error);
